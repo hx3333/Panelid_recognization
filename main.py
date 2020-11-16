@@ -5,12 +5,12 @@ Created on Tue Aug 11 11:25:25 2020
 @author: sshss
 """
 
-import sys, time, datetime, os ,cv2, shutil, logging
+import sys, time, datetime, os ,cv2, shutil, logging, random, glob
 import configparser
 from utils.img_analysis import getanalysis
 from utils.imutils import *
 from utils.Kmeans_seg import kmeans
-from utils.decoding import getmatrix, decode_datamatrix
+from utils.decoding import getmatrix, decode_datamatrix,get_min_dist
 
 
 def readconfig():
@@ -53,7 +53,7 @@ def main(img_path):
     avg_point = int(cfg["img_analyser"]["avg_point"])
     cut_edge = int(cfg["img_analyser"]["cut_edge"])
     overexpo = float(cfg["img_analyser"]["expo_upper_limit"])
-    ubderexpo = float(cfg["img_analyser"]["expo_lower_limit"])
+    underexpo = float(cfg["img_analyser"]["expo_lower_limit"])
     
     #deblur params
     NSR = float(cfg["wiener"]["NSR"])
@@ -74,6 +74,7 @@ def main(img_path):
     #matrix params
     extend_w = int(cfg["matrix"]["extend_w"])
     extend_h = int(cfg["matrix"]["extend_h"])
+    dist_thresh = int(cfg["matrix"]["dist_thresh"])
     
     date = datetime.datetime.now().strftime('%Y%m%d')
     clock = datetime.datetime.now().strftime("%H%M")
@@ -83,7 +84,7 @@ def main(img_path):
     logfolder = "./log/Detectlog/"
     if not os.path.exists(logfolder):
         os.makedirs(logfolder)
-    log = logfolder + date + "-" + clock + '.log'
+    log = logfolder + date + '.log'
     initLogging(log)
     # 加载图片并转到正常角度
     img = cv2.imread(img_path)
@@ -93,6 +94,7 @@ def main(img_path):
         flag = 1
         return flag
     img = rotate(img)
+    img = img[cut_edge:-cut_edge,cut_edge:-cut_edge]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape[:2]
     # 导入图像分析工具,为了消除边缘干扰切除边缘3pix
@@ -109,16 +111,15 @@ def main(img_path):
     
     # 限定对比度阈值的自适应直方图均衡化
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(3,3))
-    
     if K >= 1:
         if da > overexpo:
             logging.info("over exposure, ADI cannot recognize")
-            shutil.copy(img_path,os.path.join(abl_imgs,img_path.split('/')[-1]))
+            shutil.copy(img_path,os.path.join(abl_imgs,img_path.split('\\')[-1]))
             flag = 1
             return flag
-        elif da < -underexpo:
+        elif da < underexpo:
             logging.info("under exposure, ADI cannot recognize")
-            shutil.copy(img_path,os.path.join(abl_imgs,img_path.split('/')[-1]))
+            shutil.copy(img_path,os.path.join(abl_imgs,img_path.split('\\')[-1]))
             flag = 1
             return flag
         else:
@@ -128,27 +129,41 @@ def main(img_path):
         pre_process = gray
         
     if fm < blur_thresh:
-        print("Blurry image")
+        logging.info("Blurry image, ADI start deblur-algo program")
         PSF = calcPSF(h, w, R, halo)
         pre_process = wiener(gray, PSF, eps, NSR)
-    
     
     pre_process = cv2.medianBlur(pre_process, k2)
     # 用otsu阈值分割和kmeans同时对二维码区域进行分割
     seg = kmeans(pre_process, n_cluster=2)
     otsu = otsu_seg(pre_process)
+    # displayimg(seg, 'bin')
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
     get = getmatrix()
     # 在不同分割方式下，返回二维码bbox
     otsu_matrix_bbox = get.findcontours(otsu, (matrix_w_lower,matrix_w_upper,matrix_h_lower,matrix_h_upper))
     kmeans_matrix_bbox = get.findcontours(seg, (matrix_w_lower,matrix_w_upper,matrix_h_lower,matrix_h_upper))
     if (otsu_matrix_bbox is None) and (kmeans_matrix_bbox is None):
         logging.info("can't find matrix area")
-        shutil.copy(img_path,os.path.join(abl_imgs, img_path.split('/')[-1]))
+        shutil.copy(img_path,os.path.join(abl_imgs, img_path.split('\\')[-1]))
         flag = 3
         return flag
     else:
         # 优先取信kmeans结果
         bbox = filtnone(kmeans_matrix_bbox,otsu_matrix_bbox)
+        # 计算bbox Y方向最短边距
+        # sobel_Y = calcsobel(pre_process, 3, 0, 1)
+        # th, binary = cv2.threshold(sobel_Y,0,255,cv2.THRESH_OTSU)
+        roof_dist = get_min_dist(seg, bbox)
+        ground_dist = get_min_dist(seg, bbox,mode='ground')
+        logging.info("roof_dist:{}, ground_dist:{}".format(roof_dist, ground_dist))
+        if roof_dist<dist_thresh or ground_dist<dist_thresh:
+            logging.info("matrix shifted over thresh!")
+            shutil.copy(img_path,os.path.join(abl_imgs,img_path.split('\\')[-1]))
+            flag = 3
+            return flag
+        # 剪裁解码
         cropped = pre_process[bbox[1]-extend_h:bbox[1]+bbox[3]+extend_h,
                               bbox[0]-extend_w:bbox[0]+bbox[2]+extend_w]
         cropped = cv2.resize(cropped,(150,150))
@@ -163,16 +178,19 @@ def main(img_path):
         else:
             logging.info("%s decoding failed"%img_path)
             flag = 1
-            shutil.copy(img_path,os.path.join(abl_imgs,img_path.split('/')[-1]))
+            shutil.copy(img_path,os.path.join(abl_imgs,img_path.split('\\')[-1]))
             return flag
         
 if __name__ == '__main__':
-    start = time.time()
-    if len(sys.argv) > 1:
-        result = main(sys.argv[1])
-    else:
-        print('Usage: python main.py ImageFile')
-    logging.info("process time: {:.2f}".format(time.time()-start))
+
+    # if len(sys.argv) > 1:
+    img_paths = glob.glob("data/test_img/*.jpg")
+    for img_path in img_paths:
+        start = time.time()
+        result = main(img_path)
+        # else:
+        #     print('Usage: python main.py ImageFile')
+        logging.info("process time: {:.2f}s".format(time.time()-start))
 
     
 
