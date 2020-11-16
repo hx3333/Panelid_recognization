@@ -18,7 +18,7 @@ class getmatrix():
     '''
     def __init__(self, cut_edge=3):
         self.cut_edge = cut_edge
-    def findcontours(self, seg, size, extend_border=3, display=False):
+    def findcontours(self, seg, size, display=False):
         # seg = kmeans(gray, n_cluster=2, cut_edge=self.cut_edge, display=True)
         # img = gray[self.cut_edge:-self.cut_edge,self.cut_edge:-self.cut_edge]
         contours, hierarchy = cv2.findContours(seg, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -30,11 +30,7 @@ class getmatrix():
             img = cv2.rectangle(canvas, (x,y), (x+w,y+h), (0,0,255), 1)
             # format (w_lower,w_upper,h_lower,h_upper)
             if (size[0]<w<size[1]) and (size[2]<h<size[3]) and aspect>0.98:
-                # if (y-extend_border <0 ) or (x-extend_border <0):
-                #     matrix_binary = seg[y:y+h+extend_border,x:x+w+extend_border]             
-                # else:
-                #     matrix_binary = seg[y-extend_border:y+h+extend_border,x-extend_border:x+w+extend_border]
-                matrix_binary = (x,y,w,h)
+                matrix_bbox = (x,y,w,h)
             else:
                 continue
         if display:
@@ -42,7 +38,7 @@ class getmatrix():
             cv2.waitKey(0)
             cv2.destroyAllWindows()
         try:
-            return matrix_binary
+            return matrix_bbox
         except Exception as e:
             return None
 
@@ -60,3 +56,47 @@ def decode_datamatrix(binary, k1, k2):
             return str(decode_str_retry[0][0])[2:-1]
     else:
         return str(decode_str[0][0])[2:-1]
+    
+def get_min_dist(binary, bbox, mode='roof'):
+    h, w = binary.shape[:2]
+    bbox_x1 = bbox[0]
+    bbox_y1 = bbox[1]
+    bbox_x2 = bbox_x1 + bbox[2]
+    bbox_y2 = bbox_y1 + bbox[3]
+    for dist in range(h):
+        if mode == 'roof':
+            try:
+                roof_dist = int(binary[bbox_y1-dist-1,bbox_x1])-int(binary[bbox_y1-dist,bbox_x1])
+            except IndexError:
+                return bbox_y1
+            if roof_dist != 0:
+                return dist+1
+        elif mode == 'ground':
+            try:
+                ground_dist = int(binary[bbox_y2+dist+1,bbox_x2])-int(binary[bbox_y2+dist,bbox_x2])
+            except IndexError:
+                return h-bbox_y2
+            if ground_dist != 0:
+                return dist+1
+        
+            
+            
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

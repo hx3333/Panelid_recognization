@@ -11,7 +11,7 @@ import cv2
 from .imutils import rotate
 
 
-def kmeans(gray, n_cluster, cut_edge=3, display=False):
+def kmeans(gray, n_cluster, display=False):
     '''
 参数：
 	data: 分类数据，最好是np.float32的数据，每个特征放一列。
@@ -32,7 +32,6 @@ def kmeans(gray, n_cluster, cut_edge=3, display=False):
 	labels：结果标记，每个成员被标记为0,1等
 	centers：由聚类的中心组成的数组
 '''
-    gray = gray[cut_edge:-cut_edge,cut_edge:-cut_edge]
     h,w = gray.shape[:2]
     # 将图像矩阵展平
     gray_flat = gray.reshape((h*w, 1))
