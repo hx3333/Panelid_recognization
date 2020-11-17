@@ -88,6 +88,8 @@ def main(img_path):
     initLogging(log)
     # 加载图片并转到正常角度
     img = cv2.imread(img_path)
+    logging.info("-"*80)
+    logging.info("Current File: %s"%img_path.split('\\')[-1])
     if img is None:
         logging.info("Current input Error! File: %s"%img_path)
         logging.info("Cannot load the image ,make sure your filepath is correct!!!")
@@ -172,7 +174,7 @@ def main(img_path):
             matrix_bin = cv2.bitwise_not(matrix_bin)
         panelid = decode_datamatrix(matrix_bin, (k1,k1), (k2,k2))
         if panelid is not None:
-            logging.info("%s decoding successfully"%img_path)
+            logging.info("Decoding successfully")
             logging.info("The panelid is %s"%panelid)
             return flag
         else:
@@ -182,7 +184,6 @@ def main(img_path):
             return flag
         
 if __name__ == '__main__':
-
     # if len(sys.argv) > 1:
     img_paths = glob.glob("data/test_img/*.jpg")
     for img_path in img_paths:
