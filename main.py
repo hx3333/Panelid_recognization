@@ -139,9 +139,6 @@ def main(img_path):
     # 用otsu阈值分割和kmeans同时对二维码区域进行分割
     seg = kmeans(pre_process, n_cluster=2)
     otsu = otsu_seg(pre_process)
-    # displayimg(seg, 'bin')
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
     get = getmatrix()
     # 在不同分割方式下，返回二维码bbox
     otsu_matrix_bbox = get.findcontours(otsu, (matrix_w_lower,matrix_w_upper,matrix_h_lower,matrix_h_upper))
@@ -155,8 +152,6 @@ def main(img_path):
         # 优先取信kmeans结果
         bbox = filtnone(kmeans_matrix_bbox,otsu_matrix_bbox)
         # 计算bbox Y方向最短边距
-        # sobel_Y = calcsobel(pre_process, 3, 0, 1)
-        # th, binary = cv2.threshold(sobel_Y,0,255,cv2.THRESH_OTSU)
         roof_dist = get_min_dist(seg, bbox)
         ground_dist = get_min_dist(seg, bbox,mode='ground')
         logging.info("roof_dist:{}, ground_dist:{}".format(roof_dist, ground_dist))
@@ -185,7 +180,7 @@ def main(img_path):
         
 if __name__ == '__main__':
     # if len(sys.argv) > 1:
-    img_paths = glob.glob("data/test_img/*.jpg")
+    img_paths = glob.glob("data/test_img/1300_TA9C1298BP_TAAOL4C0_20191214_135706_Did-12.jpg")
     for img_path in img_paths:
         start = time.time()
         result = main(img_path)
