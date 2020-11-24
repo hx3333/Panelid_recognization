@@ -20,11 +20,11 @@ def readconfig():
 
 def filtnone(obj1, obj2):
     if obj1 is None:
-        return obj2
+        return obj2, 1
     elif obj2 is None:
-        return obj1
+        return obj1, 0
     else:
-        return obj1
+        return obj1, 0
     
 def initLogging(filename):
     global logger
@@ -35,7 +35,7 @@ def initLogging(filename):
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)
     logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     fh = logging.FileHandler(filename)
     fh.setFormatter(formatter)
     logger.addHandler(fh)
@@ -139,6 +139,7 @@ def main(img_path):
     # 用otsu阈值分割和kmeans同时对二维码区域进行分割
     seg = kmeans(pre_process, n_cluster=2)
     otsu = otsu_seg(pre_process)
+    bin_list = [seg,otsu]
     get = getmatrix()
     # 在不同分割方式下，返回二维码bbox
     otsu_matrix_bbox = get.findcontours(otsu, (matrix_w_lower,matrix_w_upper,matrix_h_lower,matrix_h_upper))
@@ -150,10 +151,12 @@ def main(img_path):
         return flag
     else:
         # 优先取信kmeans结果
-        bbox = filtnone(kmeans_matrix_bbox,otsu_matrix_bbox)
+        bbox, index = filtnone(kmeans_matrix_bbox,otsu_matrix_bbox)
+        # cv2.rectangle(gray, (bbox[0],bbox[1]), (bbox[0]+bbox[2],bbox[1]+bbox[3]), 128, 1)
+
         # 计算bbox Y方向最短边距
-        roof_dist = get_min_dist(seg, bbox)
-        ground_dist = get_min_dist(seg, bbox,mode='ground')
+        roof_dist = get_min_dist(bin_list[index], bbox)
+        ground_dist = get_min_dist(bin_list[index], bbox,mode='ground')
         logging.info("roof_dist:{}, ground_dist:{}".format(roof_dist, ground_dist))
         if roof_dist<dist_thresh or ground_dist<dist_thresh:
             logging.info("matrix shifted over thresh!")
@@ -179,13 +182,10 @@ def main(img_path):
             return flag
         
 if __name__ == '__main__':
-    # if len(sys.argv) > 1:
-    img_paths = glob.glob("data/test_img/1300_TA9C1298BP_TAAOL4C0_20191214_135706_Did-12.jpg")
+    img_paths = glob.glob("tar/*Did-4.jpg")
     for img_path in img_paths:
         start = time.time()
         result = main(img_path)
-        # else:
-        #     print('Usage: python main.py ImageFile')
         logging.info("process time: {:.2f}s".format(time.time()-start))
 
     
